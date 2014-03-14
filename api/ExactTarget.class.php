@@ -25,14 +25,19 @@
 	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 	THE SOFTWARE.
 */
+require('exacttarget_soap_client.php');
+
 class ExactTarget {
 
 	var $username = '';
 	var $password = '';
 	var $s4 = '';
+    var $instance = "";
 	var $debug = '';
 	var $subscriberkey = '';
 	var $mid = '';
+    var $runscope = '';
+    var $enforceRequired = '';
 
 
 	function ExactTarget($apikey = null, $user = null, $password=null) {
@@ -40,7 +45,8 @@ class ExactTarget {
 	}
 
 	public function updateSettings($object = false) {
-		$api->lastError = '';
+		$api = new stdClass();
+        $api->lastError = '';
 		$settings = get_option("gf_exacttarget_settings");
 		if(!$settings || !is_array($settings)) { return; }
 		foreach($settings as $key => $value) {
@@ -53,273 +59,240 @@ class ExactTarget {
 	}
 
 	public function TestAPI() {
-		$xml = $this->MakeRequest('<system></system>');
-		$result = $this->DoRequest($xml);
-		$response = $this->getResponse($result, true);
-		if(is_array($response) || $response === false) {
-			return false;
-		}
-
-		return true;
+        try{
+            $client = $this->getClient();
+            $rr = new ExactTarget_RetrieveRequest();
+            $rr->ObjectType = "BusinessUnit";
+            $rr->Properties = array();
+            $rr->Properties[] = "ID";
+            $rr->Properties[] = "Name";
+            $rr->Properties[] = "CustomerKey";
+            $rr->Options =  null;
+            if(empty($this->mid) || !is_numeric($this->mid)) {
+                $rr->QueryAllAccounts = true;
+            } else {
+                $cl = new ExactTarget_ClientID();
+                $cl->ID = $this->mid;
+                $rr->ClientIDs = $cl;
+            }
+            $rrm = new ExactTarget_RetrieveRequestMsg();
+            $rrm->RetrieveRequest = $rr;
+            $results = $client->Retrieve($rrm);
+            if(!(strtoupper($results->OverallStatus) == "OK")) {
+                $this->lastError = $result->OverallStatus();
+                return false;
+            }
+            return true;
+        }
+        catch(Exception $e) {
+            $this->r('TestAPI error:: '.$e->getMessage());
+            $this->lastError = $e->getMessage();
+            return false;
+        }
 	}
 
-	public function AddList($name = '', $type = 'public') {
-
-		$xml = self::MakeRequest('
-		<system>
-		    <system_name>list</system_name>\
-		    <action>add</action>
-		    <search_type></search_type>
-		    <search_value></search_value>
-		    <list_type>'.$type.'</list_type>
-		    <list_name>'.$name.'</list_name>
-		</system>'
-		);
-
-		return self::DoRequest($xml);
+	public function AddList($name = '', $type = 'Public') {
+        try {
+            $client = $this->getClient();
+            $list = new ExactTarget_List();
+            $list->Description = $name;
+            $list->ListName = $name;
+            $list->Type = $type;
+            $object = new SoapVar($list,SOAP_ENC_OBJECT,'List',"http://exacttarget.com/wsdl/partnerAPI");
+            $req = new ExactTarget_CreateRequest();
+            $req->Options = null;
+            $req->Objects = array($object);
+            $results = $client->Create($req);
+            if(!strtoupper($results->OverallStatus) == "OK") {
+                $this->lastError = $result->OverallStatus();
+                $this->r($this->lastError);
+                return false;
+            }
+            return true;
+        }
+        catch(Exception $e){
+            $this->r('AddList error:: '.$e->getMessage());
+            $this->lastError = $e->getMessage();
+            return false;
+        }
 	}
 
-	public function MakeRequest($xml = '') {
-		return '
-		<?xml version="1.0" ?>
-		<exacttarget>
-			<authorization>
-				<username>'.$this->username.'</username>
-				<password>'.$this->password.'</password>
-			</authorization>
-			'.$xml.'
-		</exacttarget>';
-	}
+    private function setWSDL()
+    {
+        $baseUrl = "";
+        if($this->s4) {
+            $baseUrl = 'webservice.s4.exacttarget.com';
+        } else {
+            $baseUrl = 'webservice.exacttarget.com';
+        }
+        if($this->instance == "s1")
+        {
+            $baseUrl = 'webservice.exacttarget.com';
+        }
+        if($this->instance == "s4")
+        {
+            $baseUrl = 'webservice.s4.exacttarget.com';
+        }
+        if($this->instance == "s6")
+        {
+            $baseUrl = 'webservice.s6.exacttarget.com';
+        }
+        //return 'https://webservice.s4.exacttarget.com/etframework.wsdl';
+        if($this->runscope) {
+            $baseUrl = str_replace("-","--",$baseUrl);
+            $baseUrl = str_replace(".","-",$baseUrl);
+            $baseUrl = $baseUrl . "-" . $this->runscope . ".runscope.net";
+        }
+        $baseUrl = "https://" . $baseUrl . "/etframework.wsdl";
+        return $baseUrl;
+    }
 
-	public function DoRequest($xml = '') {
+    private function getClient() {
+        try {
+            //todo: cache client
+            $wsdl = $this->setWSDL();
+            $client = new ExactTargetSoapClient($wsdl, array('trace'=>1));
+            $client->username = $this->username;
+            $client->password = $this->password;
+            return $client;
 
-		$args = array(
-	    	'headers'=> array('Content-Type' => 'application/x-www-form-urlencoded'),
-	       	'method' => 'POST',
-	    	'sslverify' => false,
-	    	'timeout' => apply_filters('exacttarget_dorequest_timeout', 30)
-	    );
-
-	    if($this->s4) {
-	    	$url = 'https://api.s4.exacttarget.com/integrate.aspx?qf=xml&xml='.urlencode($xml);
-		} else {
-			$url = 'https://api.dc1.exacttarget.com/integrate.aspx?qf=xml&xml='.urlencode($xml);
-		}
-
-		$result = wp_remote_request($url, $args);
-
-		$this->lastRequest = $result;
-
-		if(is_wp_error($result)) {
-			$this->lastError = $result->get_error_message();
-			$this->r($this->lastError);
-			return false;
-		}
-
-		$body = wp_remote_retrieve_body($result);
-
-		$this->r(array('URL Submitted To' => $url, 'WordPress `wp_remote_request` Settings' => $args, 'Result' => $result));
-
-		return $body;
-	}
+        }
+        catch(Exception $e){
+            return null;
+        }
+    }
 
 	public function Lists($showRaw = false) {
+        try{
+            flush();
 
-		flush();
+            if((!isset($_REQUEST['refresh']) || isset($_REQUEST['refresh']) && $_REQUEST['refresh'] !== 'lists') && !isset($_REQUEST['retrieveListNames']) || false) {
 
-		if((!isset($_REQUEST['refresh']) || isset($_REQUEST['refresh']) && $_REQUEST['refresh'] !== 'lists') && !isset($_REQUEST['retrieveListNames'])) {
+                // Is it saved already in a transient?
+                $lists = get_transient('extr_lists_all');
+                if(!empty($lists) && is_array($lists)) {
+                    return $lists;
+                }
 
-			// Is it saved already in a transient?
-			$lists = get_transient('extr_lists_all');
-			if(!empty($lists) && is_array($lists)) {
-				return $lists;
-			}
+                // Check if raw data already exists
+                $lists = get_transient('extr_lists_raw');
+                if(!empty($lists) && is_array($lists)) {
+                    return $lists;
+                }
 
-			// Check if raw data already exists
-			$lists = get_transient('extr_lists_raw');
-			if(!empty($lists) && is_array($lists)) {
-				return $lists;
-			}
+            } else {
+                $lists = array();
+            }
 
-		} else {
-			$lists = array();
-		}
+            $client = $this->getClient();
 
-		$xml = self::MakeRequest('
-		<system>
-		    <system_name>list</system_name>\
-		    <action>retrieve</action>
-		    <search_type>listname</search_type>
-		    <search_value></search_value>
-		</system>'
-		);
+            $rr = new ExactTarget_RetrieveRequest();
+            $rr->ObjectType = "List";
+            $rr->Properties = array();
+            $rr->Properties[] = "ID";
+            $rr->Properties[] = "ListName";
+            $rr->Properties[] = "Description";
+            $rr->Properties[] = "Type";
+            $rr->Options =  null;
+            if(empty($this->mid) || !is_numeric($this->mid)) {
+                $rr->QueryAllAccounts = true;
+            } else {
+                $cl = new ExactTarget_ClientID();
+                $cl->ID = $this->mid;
+                $rr->ClientIDs = $cl;
+            }
+            $rrm = new ExactTarget_RetrieveRequestMsg();
+            $rrm->RetrieveRequest = $rr;
+            $results = $client->Retrieve($rrm);
+            if(!(strtoupper($results->OverallStatus) == "OK")) {
+                $this->r('List retrieval failed.');
+                $this->lastError = "List retrieval error, status: " . $results->OverallStatus;
+                return false;
+            }
+            if(count($results->Results) > 20 || $showRaw)
+            {
+                foreach($results->Results as $list) {
+                    $lists[$list->ID] = array('list_id' => (string)$list->ID, 'list_name' => $list->ListName, 'list_type' => $list->Type);
+                }
+                @set_transient('extr_lists_raw', $lists, 5); //60*60*24*365);
+            } elseif(!$showRaw)
+            {
+                foreach($results->Results as $list) {
+                    $lists[$list->ID] = array('list_id' => (string)$list->ID, 'list_name' => $list->ListName, 'list_type' => $list->Type);
+                }
+                @set_transient('extr_lists_all', $lists, 5); //60*60*24*365);
+            }
 
-		$result = self::DoRequest($xml);
-
-		if(!$result) {
-			$this->r('List retrieval failed.');
-			return false;
-		}
-
-		$response = @simplexml_load_string($result);
-
-		if(!empty($response->system) && !empty($response->system->list->listid) && !empty($response->system->list->listid)) {
-			$i = 0; $count = sizeof($response->system->list->listid);
-
-			if($count > 20 || $showRaw) {
-				if(!empty($response->system) && !empty($response->system->list->listid) && !empty($response->system->list->listid)) {
-					foreach($response->system->list->listid as $listid) {
-						$lists["{$listid}"] = array('list_name' => (string)$listid);
-					}
-				}
-				@set_transient('extr_lists_raw', $lists, 60*60*24*365);
-			} elseif(!$showRaw) {
-				foreach($response->system->list->listid as $listid) {
-					$list_xml = self::ListRetrieve($listid);
-					if($list_xml->system->list->list_type == 'Public') {
-						$lists["{$listid}"] = (array)$list_xml->system->list;
-					}
-				}
-				@set_transient('extr_lists_all', $lists, 60*60*24*365);
-			}
-
-		}
-
-		return $lists;
-	}
-
-	public function ListRetrieve($listid = 0) {
-		$list = self::DoRequest(self::MakeRequest('<system>
-				    <system_name>list</system_name>
-				    <action>retrieve</action>
-				    <search_type>listid</search_type>
-				    <search_value>'.$listid.'</search_value>
-				</system>'));
-		$list_xml = @simplexml_load_string( $list );
-		return $list_xml;
+            return $lists;
+        }
+        catch(Exception $e){
+            $this->r('Lists error:: '.$e->getMessage());
+            $this->lastError = $e->getMessage();
+            return false;
+        }
 	}
 
 	public function Attributes() {
+        try{
+            $attrs = array();
 
-		$attrs = array();
-
-		$xml = self::MakeRequest('
-		<system>
-			<system_name>accountinfo</system_name>
-			<action>retrieve_attrbs</action>
-			<search_type/>
-			<search_value/>
-		</system>'
-		);
-
-		$result = self::DoRequest( $xml );
-
-		if(!$result) {
-			$this->r('Attribute retrieval failed.');
-			return false;
-		}
-
-		$response = @simplexml_load_string( $result );
-
-		if(!empty($response->system) && !empty($response->system->profile) && !empty($response->system->profile->attribute)) {
-			foreach($response->system->profile->attribute as $key => $attr) {
-
-				foreach($attr as $k => $v) {
-					if(!is_array($v)) {
-						$attr->{$k} = (string)$v;
-					}
-				}
-
-				$attrs[sanitize_user(str_replace(' ', '_', strtolower((string)$attr->name)), true)] = (array)$attr;
-			}
-
-			return $attrs;
-		}
-		return false;
+            $client = $this->getClient();
+            $req = new ExactTarget_DefinitionRequestMsg();
+            $odr = new ExactTarget_ObjectDefinitionRequest();
+            $odr->ObjectType = 'Subscriber';
+            $req->DescribeRequests = array($odr);
+            if(empty($this->mid) || !is_numeric($this->mid)) {
+                $req->QueryAllAccounts = true;
+            } else {
+                $cl = new ExactTarget_ClientID();
+                $cl->ID = $this->mid;
+                $req->ClientIDs = $cl;
+            }
+            $results = $client->Describe($req);
+            if(!isset($results->ObjectDefinition->Properties) && !isset($results->ObjectDefinition->ExtendedProperties->ExtendedProperty)) {
+                $this->r('Attribute retrieval failed.');
+                $this->lastError = 'Attribute retrieval failed.';
+                return false;
+            }
+            if((count($results->ObjectDefinition->Properties) < 1) && (count($results->ObjectDefinition->ExtendedProperties->ExtendedProperty) < 1) ) {
+                $this->lastError = 'No properties for subscriber';
+                return false;
+            }
+            foreach($results->ObjectDefinition->Properties as $prop) {
+                if($prop->IsRetrievable && $this->CanAddAttribute($prop->Name)) {
+                    $attrs[sanitize_user(str_replace(' ', '_', strtolower((string)$prop->Name)), true)] = (array)$prop;
+                }
+            }
+            foreach($results->ObjectDefinition->ExtendedProperties->ExtendedProperty as $eprop) {
+                if($eprop->IsViewable) {
+                    $attrs[sanitize_user(str_replace(' ', '_', strtolower((string)$eprop->Name)), true)] = (array)$eprop;
+                }
+            }
+            return $attrs;
+        }
+        catch(Exception $e){
+            $this->r('Attributes error:: '.$e->getMessage());
+            $this->lastError = $e->getMessage();
+            return false;
+        }
 	}
 
-	public function AddMembership($list, $email, $additional = array(), $update = '') {
-
-		if(empty($update)) {
-			$this->r(array('List ID' => $list, 'Email Address' => $email, 'Mapped, Submitted Fields' => $additional));
-		}
-
-		$xml = '
-		<system>
-			<system_name>subscriber</system_name>
-			<action>'; if(empty($update)) { $xml .= 'add'; } else { $xml .= 'edit'; } $xml .= '</action>
-			<search_type>listid</search_type>
-			<search_value>'.$list.'</search_value>
-			<search_value2>'.$update.'</search_value2>
-			<values>
-				<Email__Address>'.$email.'</Email__Address>
-				<status>active</status>';
-		 foreach($additional as $key => $value) {
-		 	if(empty($key)) { continue; }
-		 	$newkey = str_replace(' ', '__', ucwords(str_replace('_', ' ', $key)));
-
-		 	if(is_array($value)) {
-		 		$value = esc_html(implode(', ', $value));
-		 	} elseif(!preg_match('/\<\!\[CDATA\[/', $value)) {
-		 		$value = esc_html($value);
-		 	}
-		 	$xml .= '
-		 		<'.$newkey.'>'.$value.'</'.$newkey.'>';
-		 }
-		if(!empty($this->mid) && is_numeric($this->mid)) {
-			$xml .= '<ChannelMemberID>'.$this->mid.'</ChannelMemberID>';
-		}
-
-		 $xml .= '
-			</values>';
-		  if(empty($update)) { $xml .= '
-			<update>true</update>'; }
-		$xml .= '
-		</system>';
-
-		$this->r(htmlentities($xml), 'Posted XML');
-
-		$xml = self::MakeRequest( $xml );
-
-		$response = self::DoRequest($xml);
-
-		if(!$response) {
-			$this->r('Add/update subscriber failed.');
-			return false;
-		}
-
-		$response = $this->getResponse($response);
-		if($response === false || is_array($response)) {
-			if($response[0] == 14) {
-				$this->r($response[1],'Error 14');
-				self::AddMembership($list, $email, $additional, $email);
-			} else {
-				$this->r($this->lastError);
-				return false;
-			}
-		} else {
-			// Return subscriber ID if successful
-			$this->r($response, 'ID of Subscriber');
-			return $response;
-		}
-
-		return true;
-	}
-
-	public function getResponse($response = '', $testapi = false) {
-		if(preg_match('/\<error\>([0-9]+)\<\/error\>(?:\s+)?<error\_description\>(.*?)\<\/error_description\>/ism', $response, $matches)) {
-			if($testapi && $matches[1] === '71') {
-				$this->lastError = false;
-				return $matches[1];
-			}
-			$this->lastError = 'Error '.$matches[1].': '.$matches[2];
-			return array($matches[1], $matches[2]);
-		} elseif(preg_match('/\<subscriber_description\>([0-9]+)\<\/subscriber_description\>/ism', $response, $matches)) {
-			$this->lastError = false;
-			return $matches[1];
-		}
-		return false;
-	}
+    private static function CanAddAttribute($attName)
+    {
+        switch (strtolower($attName))
+        {
+            case 'id':
+            case 'partnerkey':
+            case 'createddate':
+            case 'client.id':
+            case 'client.partnerclientkey':
+            case 'unsubscribeddate':
+            case 'status':
+            case 'isplatformobject':
+                return false;
+        }
+        return true;
+    }
 
 	public function errorCodeMessage($errorcode = '', $errorcontrol = '') {
 
@@ -342,92 +315,104 @@ class ExactTarget {
 	}
 
 	public function listSubscribe($lists = array(), $email = '', $merge_vars = array()) {
+        try{
+            $this->lastError = '';
 
-		$this->lastError = '';
+            if(!is_array($lists)) { $lists = explode(',',$lists); }
 
-		if(!is_array($lists)) { $lists = explode(',',$lists); }
+            if(empty($this->mid)) {
+                $this->lastError = 'The MID was not defined in the ExactTarget settings. The attempt to add the subscriber was not made.';
+                $this->r($this->lastError);
+                return;
+            } elseif(empty($lists)) {
+                $this->lastError = 'No lists were selected. The attempt to add the subscriber was not made.';
+                $this->r($this->lastError);
+                return;
+            }
 
-		if(empty($this->mid)) {
-			$this->lastError = 'The MID was not defined in the ExactTarget settings. The attempt to add the subscriber was not made.';
-			$this->r($this->lastError);
-			return;
-		} elseif(empty($lists)) {
-			$this->lastError = 'No lists were selected. The attempt to add the subscriber was not made.';
-			$this->r($this->lastError);
-			return;
-		}
+            $params = $merge_vars;
 
-        $params = $merge_vars;
+            foreach($params as $key => $p) {
+                if(is_array($p)) {
+                    $p = implode(', ', $p);
+                } else {
+                    $p = rtrim(trim($p));
+                }
+                if(empty($p) && $p !== '0') {
+                    unset($params[$key]);
+                } else {
+                    $params[$key] = $p;
+                }
+            }
 
-		foreach($params as $key => $p) {
-			if(is_array($p)) {
-				$p = implode(', ', $p);
-			} else {
-        		$p = rtrim(trim($p));
-        	}
-        	if(empty($p) && $p !== '0') {
-        		unset($params[$key]);
-        	} else {
-	        	$params[$key] = $p;
-	        }
+            foreach($params as $key => $value) {
+                $newkey = ucwords(str_replace('_', ' ', $key));
+                $params["{$newkey}"] = esc_html($value);
+                unset($params[$key]);
+            }
+
+            $client = $this->getClient();
+            $sub = new ExactTarget_Subscriber();
+            $sub->EmailAddress = $email;
+            if($this->subscriberkey) {
+                $sub->SubscriberKey = $email;
+            }
+            if(empty($this->mid) || !is_numeric($this->mid)) {
+                $sub->QueryAllAccounts = true;
+            } else {
+                $cl = new ExactTarget_ClientID();
+                $cl->ID = $this->mid;
+                $sub->Client = $cl;
+            }
+
+            $sub->Lists = array();
+            foreach($lists as $key => $value)
+            {
+                $sl = new ExactTarget_SubscriberList();
+                $sl->ID = $value;
+                $sl->Status = ExactTarget_SubscriberStatus::Active;
+                $sub->Lists[] = $sl;
+            }
+
+
+            $sub->Attributes = array();
+             foreach($params as $key => $value) {
+                if(empty($key)) { continue; }
+                if(strtolower($key) == 'emailaddress') { continue;}
+                if(strtolower($key) == 'subscriberkey') { continue;}
+                $attrib = new ExactTarget_Attribute();
+                $attrib->Name = $key;
+                $attrib->Value = $value;
+                $sub->Attributes[] = $attrib;
+            }
+
+
+            $so = new ExactTarget_SaveOption();
+            $so->PropertyName = "*";
+            $so->SaveAction = ExactTarget_SaveAction::UpdateAdd;
+            $soe = new SoapVar($so, SOAP_ENC_OBJECT, 'SaveOption',"http://exacttarget.com/wsdl/partnerAPI");
+            $opt = new ExactTarget_UpdateOptions();
+            $opt->SaveOptions = array($soe);
+            $sub->Status = ExactTarget_SubscriberStatus::Active;
+            $obj = new SoapVar($sub, SOAP_ENC_OBJECT, 'Subscriber', "http://exacttarget.com/wsdl/partnerAPI");
+            $req = new ExactTarget_CreateRequest();
+            $req->Options = $opt;
+            $req->Objects = array($obj);
+            $results = $client->Create($req);
+            if(strtoupper($results->OverallStatus) != "OK") {
+                $this->r('Add/update subscriber failed: '.$results->StatusMessage);
+                $this->lastError = $results->StatusMessage;
+                return false;
+
+            }
+
+            return true;
         }
-
-		#echo '<pre>';
-
-		foreach($params as $key => $value) {
-		 	$newkey = ucwords(str_replace('_', ' ', $key));
-		 	$params["{$newkey}"] = esc_html($value);
-		 	unset($params[$key]);
-		}
-
-		if($this->subscriberkey) {
-			$params["Subscriber Key"] = $email;
-		}
-
-		$params['MID'] = $this->mid;
-		$params['SubAction'] = 'sub_add_update';
-
-		$this->r(array('List IDs' => $lists, 'Email Address' => $email, 'Mapped, Submitted Fields' => $params));
-
-
-		$args = array(
-			'method' => 'POST',
-	    	'sslverify' => false,
-	    	'timeout' => 30
-	    );
-
-	    if($this->s4) {
-			$url = 'http://cl.s4.exct.net/subscribe.aspx?lid='.implode('&lid=',$lists).'&'.http_build_query($params);
-		} else {
-			$url = 'http://cl.exct.net/subscribe.aspx?lid='.implode('&lid=',$lists).'&'.http_build_query($params);
-		}
-
-		$result = wp_remote_request($url, $args);
-
-		$this->r(array('URL Submitted To' => $url, 'WordPress `wp_remote_request` Settings' => $args, 'Result' => $result));
-
-		$body = $result['body'];
-
-		if($result['response']['code'] !== 200) {
-			if($result['response']['code'] == 500) {
-				$this->lastError = $body;
-			} else {
-				$this->lastError = 'Server error: '.$result['response']['code'].' ('.$result['response']['message'].')';
-			}
-		} else if(is_wp_error($result) || !$result) {
-			$this->lastError = 'The form submission failed.';
-		} elseif(preg_match('/action\=\"app_error\.aspx\?(.*?)"/', $body, $matches)) {
-			parse_str(str_replace('&amp;', '&', $matches[1]), $error);
-			$this->lastError = $this->errorCodeMessage($error['errorcode'], $error['errorcontrol']);
-		} else {
-			$this->lastError = '';
-			$this->r('It seems the form was successfully submitted.', 'Contact Creation Success');
-			return true;
-		}
-
-		$this->r($this->lastError, 'Contact Creation Failure');
-		return false;
-
+        catch(Exception $e) {
+            $this->r('ListSubscribe error:: '.$e->getMessage());
+            $this->lastError = $e->getMessage();
+            return false;
+        }
 	}
 
 	function r($debugging = '', $title = '') {

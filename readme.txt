@@ -1,9 +1,9 @@
 === Gravity Forms ExactTarget Add-on ===
 Tags: gravity forms, forms, gravity, form, crm, gravity form, email, newsletter, ExactTarget, Exact Target, mailing list, email marketing, newsletters, ExactTarget WordPress
 Requires at least: 2.8
-Tested up to: 3.5
+Tested up to: 3.8.1
 Stable tag: trunk
-Contributors: katzwebdesign
+Contributors: katzwebdesign, Precision Dialogue
 Donate link:https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=zackkatz%40gmail%2ecom&item_name=Gravity%20Forms%20ExactTarget&no_shipping=0&no_note=1&tax=0&currency_code=USD&lc=US&bn=PP%2dDonationsBF&charset=UTF%2d8
 
 Integrate the remarkable <a href="http://wordpressformplugin.com/?r=et" rel="nofollow">Gravity Forms</a> plugin with ExactTarget.
@@ -56,15 +56,15 @@ This plugin requires the brilliant [Gravity Forms plugin](http://wordpressformpl
 = Does this plugin require ExactTarget? =
 Well of course it does.
 
-= The plugin doesn't work for me. Why not!? =
-If you are using ExactTarget Enterprise 2.0, this plugin won't work for you. It requires the XML API, which Enterprise 2.0 does not support.
-
 = What's the license for this plugin? =
 This plugin is released under a GPL license.
 
 == Changelog ==
 
-= 1.0.6 = 
+= 1.0.7 =
+* Rewrite plugin to use SOAP API instead of XML so that it supports all ExactTarget account types, including Enterprise 2.0. Removed the option to use Web Collect. Added http://www.runscope.com debugging option for diagnosing API call issues. Added ability to not enforce mapping of required fields.
+
+= 1.0.6 =
 * Implemented fix proposed by @rigrobert to fix Step 2 setup issue. If you still have this issue, <strong>please email <a href="mailto:support@katz.co">support@katz.co</a></strong> with your plugin configuration.
 
 = 1.0.5 = 
@@ -88,6 +88,9 @@ This plugin is released under a GPL license.
 * First Version
 
 == Upgrade Notice ==
+
+= 1.0.7 =
+* Rewrite plugin to use SOAP API instead of XML so that it supports all ExactTarget account types, including Enterprise 2.0. Removed the option to use Web Collect. Added http://www.runscope.com debugging option for diagnosing API call issues. Added ability to not enforce mapping of required fields.
 
 = 1.0.6 = 
 * Implemented fix proposed by @rigrobert to fix Step 2 setup issue. If you still have this issue, <strong>please email <a href="mailto:support@katz.co">support@katz.co</a></strong> with your plugin configuration.
