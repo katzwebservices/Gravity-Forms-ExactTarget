@@ -1,11 +1,11 @@
 <?php
 /*
 Plugin Name: Gravity Forms ExactTarget Add-On
-Plugin URI: http://www.seodenver.com/exacttarget/
+Plugin URI: https://katz.co/plugins/gravity-forms-exacttarget/
 Description: Integrates Gravity Forms with ExactTarget allowing form submissions to be automatically sent to your ExactTarget account
-Version: 1.0.6
-Author: Katz Web Services, Inc.
-Author URI: http://www.katzwebservices.com
+Version: 1.0.7
+Author: Katz Web Services, Inc., PrecisionDialogue
+Author URI: http://www.katzwebservices.com, http://www.precisiondialogue.com
 
 ------------------------------------------------------------------------
 Copyright 2011 Katz Web Services, Inc.
@@ -207,7 +207,10 @@ class GFExactTarget {
                 "debug" => isset($_POST["gf_exacttarget_debug"]),
                 "subscriberkey" => isset($_POST["gf_exacttarget_subscriberkey"]),
                 "s4" => isset($_POST["gf_exacttarget_s4"]),
-                "addtype" => stripslashes($_POST["gf_exacttarget_addtype"])
+                "instance" => stripslashes(($_POST["gf_exacttarget_instance"])),
+                "addtype" => stripslashes($_POST["gf_exacttarget_addtype"]),
+                "runscope" => stripslashes($_POST["gf_exacttarget_runscope"]),
+                "enforceRequired" => stripslashes($_POST["gf_exacttarget_enforceRequired"])
             );
             update_option("gf_exacttarget_settings", $settings);
         }
@@ -222,7 +225,10 @@ class GFExactTarget {
                 "subscriberkey" => false,
                 "debug" => false,
                 "s4" => false,
-                "addtype" => 'api'
+                "instance" => "",
+                "addtype" => 'api',
+                "runscope" => "",
+                "enforceRequired" => true
             ));
 
         $api = self::get_api();
@@ -276,17 +282,14 @@ class GFExactTarget {
                     <td><input type="password" id="gf_exacttarget_password" name="gf_exacttarget_password" size="40" value="<?php echo !empty($settings["password"]) ? esc_attr($settings["password"]) : ''; ?>"/></td>
                 </tr>
                 <tr>
-                    <th scope="row"><label for="gf_exacttarget_s4"><?php _e("Are you on S4?", "gravity-forms-exacttarget"); ?></label></th>
-                    <td><input type="checkbox" id="gf_exacttarget_s4" name="gf_exacttarget_s4" value="1" <?php checked($settings["s4"], true); ?>/>
-                    <span class="howto"><?php _e("When you log in to ExactTarget, does the URL start with <code>https://members.<strong>s4</strong>.exacttarget.com</code>? if so, you are on S4. Otherwise, you are not. Need more help?", "gravity-forms-exacttarget"); ?> <a rel="external" target="_blank" href="http://wiki.memberlandingpages.com/010_ExactTarget/010_Getting_Started/The_Getting_Started_Guide/Set_Up_Your_Account#How_To_Determine_What_Instance_You're_On"><?php _e("How to Determine What Instance You're On", "gravity-forms-exacttarget"); ?></a>.</span>
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row"><label for="gf_exacttarget_addtype"><?php _e("Submission Type", "gravity-forms-exacttarget"); ?></label></th>
+                    <th scope="row"><label for="gf_exacttarget_instance"><?php _e("ExactTarget instance", "gravity-forms-exacttarget"); ?></label></th>
                     <td>
-                        <label for="gf_exacttarget_addtype_api" style="margin-right:1em;"><input type="radio" id="gf_exacttarget_addtype_api" name="gf_exacttarget_addtype" value="api" <?php checked($settings["addtype"], 'api'); ?>/> <?php _e("API (default)", "gravity-forms-exacttarget"); ?></label>
-                        <label for="gf_exacttarget_addtype_webcollect"><input type="radio" id="gf_exacttarget_addtype_webcollect" name="gf_exacttarget_addtype" value="webcollect" <?php checked($settings["addtype"], 'webcollect'); ?>/> <?php _e("Web Collect", "gravity-forms-exacttarget"); ?></label>
-                    <span class="howto"><?php _e(sprintf('Using the %sXML API%s is the preferred method, but if for some reason you would like to use %sWeb Collect%s instead, you can.', '<a href="http://wiki.memberlandingpages.com/030_Developer_Documentation/040_XML_API">', '</a>', '<a href="http://wiki.memberlandingpages.com/010_ExactTarget/030_Subscribers/Web_Collect">', '</a>'), "gravity-forms-exacttarget"); ?></span>
+                        <select id="gf_exacttarget_instance" name="gf_exacttarget_instance">
+                            <option value="s1" id="s1" <?php if($settings["instance"] == "s1") echo "selected"; ?>>S1</option>
+                            <option value="s4" id="s4" <?php if($settings["instance"] == "s4") echo "selected"; ?>>S4</option>
+                            <option value="s6" id="s6" <?php if($settings["instance"] == "s6") echo "selected"; ?>>S6</option>
+                        </select>
+                    <span class="howto"><?php _e("When you log in to ExactTarget, does the URL start with <code>https://members.<strong>s1</strong>.exacttarget.com</code>, <code>https://members.<strong>s4</strong>.exacttarget.com</code> or <code>https://members.<strong>s6</strong>.exacttarget.com</code>? Please select the matching value from the list. Need more help?", "gravity-forms-exacttarget"); ?> <a rel="external" target="_blank" href="http://wiki.memberlandingpages.com/010_ExactTarget/010_Getting_Started/The_Getting_Started_Guide/Set_Up_Your_Account#How_To_Determine_What_Instance_You're_On"><?php _e("How to Determine What Instance You're On", "gravity-forms-exacttarget"); ?></a>.</span>
                     </td>
                 </tr>
                 <tr>
@@ -298,8 +301,17 @@ class GFExactTarget {
                     <td><input type="checkbox" id="gf_exacttarget_subscriberkey" name="gf_exacttarget_subscriberkey" value="1" <?php checked($settings["subscriberkey"], true); ?>/></td>
                 </tr>
                 <tr>
+                    <th scope="row"><label for="gf_exacttarget_enforceRequired"><?php _e("Enforce mapping of all required fields", "gravity-forms-exacttarget"); ?></label> </th>
+                    <td><input type="checkbox" id="gf_exacttarget_enforceRequired" name="gf_exacttarget_enforceRequired" value="1" <?php checked($settings["enforceRequired"], true); ?>/></td>
+                </tr>
+                <tr>
                     <th scope="row"><label for="gf_exacttarget_debug"><?php _e("Debug Form Submissions for Administrators", "gravity-forms-exacttarget"); ?></label> </th>
                     <td><input type="checkbox" id="gf_exacttarget_debug" name="gf_exacttarget_debug" value="1" <?php checked($settings["debug"], true); ?>/></td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="gf_exacttarget_runscope"><?php _e("Runscope bucket key", "gravity-forms-exacttarget"); ?></label></th>
+                    <td valign="top"><input type="text" id="gf_exacttarget_runscope" name="gf_exacttarget_runscope" size="10" value="<?php echo !empty($settings["runscope"]) ? esc_attr($settings["runscope"]) : ''; ?>"/>
+                    <span class="howto"><?php _e("This is an ExactTarget API call debugging option. If you are having issues with API calls and want to use <a href='https://www.runscope.com' target='_blank'>Runscope</a> to analyze the calls, enter the bucket key here.", "gravity-forms-exacttarget"); ?></span></td>
                 </tr>
                 <tr>
                     <td colspan="2" ><input type="submit" name="gf_exacttarget_submit" class="button-primary" value="<?php _e("Save Settings", "gravity-forms-exacttarget") ?>" /></td>
@@ -317,23 +329,22 @@ class GFExactTarget {
 
                 $lists_raw = $api->Lists(true);
 
-                $i = 0; $count = sizeof($lists_raw);
+                $i = 0; $count = count($lists_raw);
                 echo '<h4>'.__(sprintf('Retrieving list names for %d lists', $count), "gravity-forms-exacttarget").'</h4>';
                 echo '<ol class="lists_loading ol-decimal" style="list-style:decimal outside!important; margin-left:1.8em!important;">';
-                    foreach($lists_raw as $listid => $list) {
+                    foreach($lists_raw as $list ) {
                     $i++;
-                    echo '<li style="margin-bottom:.5em!important; list-style: decimal outside;">List #'.$listid;
-                    $list_xml = $api->ListRetrieve($listid);
-                    if($list_xml->system->list->list_type == 'Public') {
-                        $lists["{$listid}"] = (array)$list_xml->system->list;
-                        echo ': &ldquo;<strong>'.$list_xml->system->list->list_name.'</strong>&rdquo;';
+                    echo '<li style="margin-bottom:.5em!important; list-style: decimal outside;">List #'.$list['list_id'];
+                    if(strtolower($list['list_type']) == 'public') {
+                        $lists[$list['list_id']] = $list;
+                        echo ': &ldquo;<strong>'.$list['list_name'].'</strong>&rdquo;';
                     }
                     echo ' ('.$i.' of '.$count.' / '. round(($i/$count * 100), 1).'% Completed)</li>';
                     flush();
                 }
 
                 echo '</ol>';
-                @set_transient('extr_lists_all', $lists, 60*60*24*365);
+                @set_transient('extr_lists_all', $lists, 5);// 60*60*24*365);
                 } else {
                 ?>
                 <p>
@@ -609,7 +620,7 @@ class GFExactTarget {
                 }
                 else{
                     unset($field_map[$key]);
-                    if($var["required"] == "True")
+                    if($var["IsRequired"] && $api->enforceRequired)
                     $is_valid = false;
                 }
                 unset($_POST["{$field_name}"]);
@@ -672,7 +683,7 @@ class GFExactTarget {
 
                 if (!$lists){
                     echo __("Could not load ExactTarget contact lists. <br/>Error: ", "gravity-forms-exacttarget");
-                    echo isset($api->errorMessage) ? $api->errorMessage : '';
+                    echo isset($api->lastError) ? $api->lastError : '';
                 }
                 else{
                     if(isset($config["meta"]["contact_list_id"])) {
@@ -1049,9 +1060,9 @@ class GFExactTarget {
 
         foreach($merge_vars as $key => $var){
             $selected_field = (isset($config["meta"]) && isset($config["meta"]["field_map"]) && isset($config["meta"]["field_map"][$key])) ? $config["meta"]["field_map"][$key] : '';
-            $required = $var["required"] == "True" ? "<span class='gfield_required'>*</span>" : "";
-            $error_class = $var["required"] == "True" && empty($selected_field) && !empty($_POST["gf_exacttarget_submit"]) ? " feeds_validation_error" : "";
-            $str .= "<tr class='$error_class'><td class='exacttarget_field_cell'><label for='exacttarget_map_field_".$key."'>" . $var["name"]  . " $required</label></td><td class='exacttarget_field_cell'>" . self::get_mapped_field_list($key, $selected_field, $form_fields) . "</td></tr>";
+            $required = $var["IsRequired"] == "true" ? "<span class='gfield_required'>*</span>" : "";
+            $error_class = $var["IsRequired"] == "true" && empty($selected_field) && !empty($_POST["gf_exacttarget_submit"]) ? " feeds_validation_error" : "";
+            $str .= "<tr class='$error_class'><td class='exacttarget_field_cell'><label for='exacttarget_map_field_".$key."'>" . $var["Name"]  . " $required</label></td><td class='exacttarget_field_cell'>" . self::get_mapped_field_list($key, $selected_field, $form_fields) . "</td></tr>";
         }
         $str .= "</table>";
 
@@ -1166,7 +1177,12 @@ class GFExactTarget {
         #print_r($feed); die();
         $double_optin = false; // $feed["meta"]["double_optin"] ? true : false;
         $send_welcome = false; // $feed["meta"]["welcome_email"] ? true : false;
-        $email_field_id = $feed["meta"]["field_map"]["email_address"];
+        if(isset($feed["meta"]["field_map"]["email_address"])) {
+            $email_field_id = $feed["meta"]["field_map"]["email_address"];
+        }
+        if(isset($feed["meta"]["field_map"]["emailaddress"])) {
+            $email_field_id = $feed["meta"]["field_map"]["emailaddress"];
+        }
         $email = $entry[$email_field_id];
 
         $merge_vars = array('');
@@ -1181,11 +1197,7 @@ class GFExactTarget {
                 $merge_vars[$var_tag] = empty($entry[$field_id]) ? '' : GFCommon::get_country_code(trim($entry[$field_id]));
             } else if($var_tag != "email") {
                 if(!empty($entry[$field_id])) {
-                    if($field['type'] == 'textarea') {
-                        $merge_vars[$var_tag] = '<![CDATA['.$entry[$field_id].']]>';
-                    } else{
-                        $merge_vars[$var_tag] = $entry[$field_id];
-                    }
+                    $merge_vars[$var_tag] = $entry[$field_id];
                 } else {
                     foreach($entry as $key => $value) {
                         if(floor($key) == floor($field_id) && !empty($value)) {
@@ -1200,15 +1212,7 @@ class GFExactTarget {
             $merge_vars['source_form'] = $form['title'];
         }
 
-        if((empty($api->addtype) || $api->addtype == 'api') && empty($api->subscriberkey)) {
-            $lists = explode(',',$feed["meta"]["contact_list_id"]);
-            foreach($lists as $list) {
-                $api->AddMembership($list, $email, $merge_vars);
-            }
-        } else {
-            $api->listSubscribe($feed["meta"]["contact_list_id"], $email, $merge_vars);
-        }
-
+        $api->listSubscribe($feed["meta"]["contact_list_id"], $email, $merge_vars);
     }
 
     public static function uninstall(){
