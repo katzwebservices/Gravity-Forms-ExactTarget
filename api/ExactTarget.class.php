@@ -40,7 +40,7 @@ class ExactTarget {
 	}
 
 	public function updateSettings($object = false) {
-		$api->lastError = '';
+		if($object !== false) $object->lastError = '';
 		$settings = get_option("gf_exacttarget_settings");
 		if(!$settings || !is_array($settings)) { return; }
 		foreach($settings as $key => $value) {
