@@ -1,7 +1,7 @@
 === Gravity Forms ExactTarget Add-on ===
 Tags: gravity forms, forms, gravity, form, crm, gravity form, email, newsletter, ExactTarget, Exact Target, mailing list, email marketing, newsletters, ExactTarget WordPress
 Requires at least: 2.8
-Tested up to: 3.5
+Tested up to: 3.9.1
 Stable tag: trunk
 Contributors: katzwebdesign
 Donate link:https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=zackkatz%40gmail%2ecom&item_name=Gravity%20Forms%20ExactTarget&no_shipping=0&no_note=1&tax=0&currency_code=USD&lc=US&bn=PP%2dDonationsBF&charset=UTF%2d8
@@ -63,6 +63,9 @@ If you are using ExactTarget Enterprise 2.0, this plugin won't work for you. It 
 This plugin is released under a GPL license.
 
 == Changelog ==
+
+= 1.0.7 = 
+* Fixes "Warning: Creating default object from empty value in [...]gravity-forms-exacttarget\api\ExactTarget.class.php on line 43" error. Thanks, [aduth](https://github.com/aduth)!
 
 = 1.0.6 = 
 * Implemented fix proposed by @rigrobert to fix Step 2 setup issue. If you still have this issue, <strong>please email <a href="mailto:support@katz.co">support@katz.co</a></strong> with your plugin configuration.
